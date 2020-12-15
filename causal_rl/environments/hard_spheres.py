@@ -94,7 +94,9 @@ class HardSpheres(CausalEnv):
         self.space.step(dt)
         return self.get_state(), 0, False, None
 
+    # TODO: Rename `epochs` to `steps`
     def generate_data(self, epochs: int=10000, dt: float=0.01) -> Tuple[np.ndarray, np.ndarray]:
+        """Generate a full run of the environment."""
         states = np.zeros((epochs, self.num_obj, 4))
         rewards = np.zeros((epochs, 1))
         self.reset()
@@ -105,24 +107,14 @@ class HardSpheres(CausalEnv):
                 states[t, :, 2:] = (states[t, :, :2] - states[t - 1, :, :2]) / dt
             self.step(dt=dt)
 
-        # inputs = []
-        # targets = []
-        # for j in range(epochs - 1):
-        #     if np.array_equal(states[j, :, 2:].astype(int), states[j + 1, :, 2:].astype(int)):
-        #         continue
-        #     inputs.append(states[j])
-        #     targets.append(states[j + 1])
-        # inputs = np.array(inputs)
-        # targets = np.array(targets)
-
         return states, rewards
 
     def visualize(self, state: np.ndarray, save_path: Optional[str]=None):
         """Visualize a single state.
 
         Args:
-            pos: The positions of the balls.
-            t:
+            state: State at a single time step.
+            save_path: Where to save the snapshot
         """
         colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
         pos = state[:, :2]
