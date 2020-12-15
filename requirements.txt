@@ -1,0 +1,15 @@
+fire==0.3.1
+flake8==3.8.3
+gym==0.17.2
+matplotlib==3.3.0
+mujoco-py==2.0.2.11
+mypy==0.782
+mypy-extensions==0.4.3
+networkx==2.3
+numpy==1.18.5
+pymunk==5.6.0
+scipy==1.5.2
+tensorboard==2.4.0
+torch==1.6.0
+torchvision==0.7.0
+typing-extensions==3.7.4.2
