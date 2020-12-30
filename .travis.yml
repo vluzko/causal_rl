@@ -4,6 +4,7 @@ python:
   - "3.8"
 install:
   - pip install -r requirements.txt
+  - pip install .
 script:
   - pytest
 after_success:
