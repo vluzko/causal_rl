@@ -1,13 +1,9 @@
 import gym
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import numpy as np
 
-from gym import Env
-from scipy.spatial import distance
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple
 
-from causal_rl.environments import CausalEnv
+from causal_rl.environments.causal_env import CausalEnv
 
 
 class Mujoco(CausalEnv):
