@@ -137,7 +137,7 @@ class HardSpheres(CausalEnv):
 
         plt.close()
 
-    def detect_collisions(self, trajectories: np.ndarray) -> np.ndarray:
+    def generate_causal_graphs(self, trajectories: np.ndarray) -> np.ndarray:
         n = trajectories.shape[0]
         k = self.num_obj
         min_dist = self.radii.reshape(k, 1) + self.radii.reshape(1, k)

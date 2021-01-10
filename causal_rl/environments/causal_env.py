@@ -22,7 +22,7 @@ class CausalEnv(Env):
         """
         raise NotImplementedError
 
-    def detect_collisions(self, trajectories: np.ndarray) -> np.ndarray:
+    def generate_causal_graphs(self, trajectories: np.ndarray) -> np.ndarray:
         """Detect collisions for a sequence of states.
 
         Args:

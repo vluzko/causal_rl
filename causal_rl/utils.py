@@ -121,7 +121,7 @@ def store_sim(env, steps) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     env_name = env.name
     env_size = env.num_obj
     states, rewards = env.generate_data(epochs=steps)
-    collisions = env.detect_collisions(states)
+    collisions = env.generate_causal_graphs(states)
 
     s_path = DATA / '{}_{}_{}_states.npy'.format(env_name, env_size, steps)
     c_path = DATA / '{}_{}_{}_graphs.npy'.format(env_name, env_size, steps)

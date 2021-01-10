@@ -45,13 +45,8 @@ class Mujoco(CausalEnv):
             # Step with a random agent
             action = self.underlying.action_space.sample()
             state, reward, done, _ = self.underlying.step(action)
-            # states[t, :self.obs_size] = state.reshape(self.obs_size, self.obj_dim)
-            # states[t, self.obs_size:] = action.reshape(self.act_size, self.obj_dim)
             states[t] = state.reshape(self.obs_size, self.obj_dim)
             rewards[t] = reward
-
-            # if done:
-            #     self.underlying.reset()
 
         return states, rewards
 
@@ -64,7 +59,7 @@ class Mujoco(CausalEnv):
         """
         raise NotImplementedError
 
-    def detect_collisions(self, trajectories: np.ndarray) -> np.ndarray:
+    def generate_causal_graphs(self, trajectories: np.ndarray) -> np.ndarray:
         """For now we just return an empty collision graph."""
         n = trajectories.shape[0]
         k = self.num_obj
