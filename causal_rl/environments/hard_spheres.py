@@ -1,8 +1,6 @@
 import numpy as np
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from gym import Env
 from scipy.spatial import distance
 from typing import Optional, Tuple, Any
 
@@ -116,7 +114,6 @@ class HardSpheres(CausalEnv):
             state: State at a single time step.
             save_path: Where to save the snapshot
         """
-        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
         pos = state[:, :2]
         momenta = state[:, 2:]
         fig, ax = plt.subplots(figsize=(6, 6))
