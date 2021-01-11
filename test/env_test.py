@@ -3,7 +3,7 @@ import causal_rl
 
 
 def test_hard_spheres():
-    print(causal_rl)
+    dir(causal_rl)
     # num_obj = 2
     # steps = 100
     # env = causal_rl.environments.HardSpheres(num_obj=num_obj)
