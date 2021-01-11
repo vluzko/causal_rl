@@ -1,7 +1,7 @@
+"""Neural networks for predicting the next state given current state and a causal graph."""
 import torch
-from torch import nn
-from torch.nn import Sequential, Linear, LeakyReLU, functional as F
 
+from torch import nn
 from typing import Tuple, List
 
 from causal_rl import utils
@@ -85,10 +85,10 @@ class WeightedPredictor(nn.Module):
 
         for prev_width, width in zip(msg_widths[:-1], msg_widths[1:]):
             msg_layers.append(nn.BatchNorm1d(prev_width))
-            msg_layers.append(LeakyReLU())  # type: ignore
+            msg_layers.append(nn.LeakyReLU())  # type: ignore
             msg_layers.append(nn.Linear(prev_width, width))
         msg_layers.append(nn.BatchNorm1d(msg_widths[-1]))
-        msg_layers.append(LeakyReLU())
+        msg_layers.append(nn.LeakyReLU())
         msg_layers.append(nn.Linear(msg_widths[-1], self.obj_dim))
 
         self.msg = nn.Sequential(*msg_layers)
@@ -97,10 +97,10 @@ class WeightedPredictor(nn.Module):
 
         for prev_width, width in zip(final_widths[:-1], final_widths[1:]):
             final_layers.append(nn.BatchNorm1d(prev_width))
-            final_layers.append(LeakyReLU())  # type: ignore
+            final_layers.append(nn.LeakyReLU())  # type: ignore
             final_layers.append(nn.Linear(prev_width, width))
         final_layers.append(nn.BatchNorm1d(final_widths[-1]))
-        final_layers.append(LeakyReLU())
+        final_layers.append(nn.LeakyReLU())
         final_layers.append(nn.Linear(final_widths[-1], self.obj_dim))
 
         self.final = nn.Sequential(*final_layers)
@@ -110,8 +110,8 @@ class WeightedPredictor(nn.Module):
         """Pass messages.
 
         Args:
-            state: The state batch. Should have shape (batch_size x num_objects x obj_dim)
-            probs: The probabilities of edges between all objects. Should have shape (batch_size x (num_objects * (num_objects - 1)))
+            state: The state batch. Should have shape (batch_size, num_objects, obj_dim)
+            probs: The probabilities of edges between all objects. Should have shape (batch_size, (num_objects * (num_objects - 1)))
         """
         batch_size = state.shape[0]
         # The graph is fully connected, so we have a slightly weird architecture.
