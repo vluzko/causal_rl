@@ -54,11 +54,6 @@ scipy==1.5.2
 six==1.15.0
 tensorboard==2.4.0
 tensorboard-plugin-wit==1.7.0
-termcolor==1.1.0
-toml==0.10.2
 torch==1.6.0
 torchvision==0.7.0
-typed-ast==1.4.1
 typing-extensions==3.7.4.2
-urllib3==1.26.2
-Werkzeug==1.0.1
