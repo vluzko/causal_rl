@@ -27,7 +27,7 @@ class CausalPredictor(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Call the graph predictor, then the state predictor."""
-        graph = self.graph_predictor(inputs)
+        raise NotImplementedError
 
 
 class NaivePredictor(nn.Module):
