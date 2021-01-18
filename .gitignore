@@ -1,7 +1,9 @@
 __pycache__/
 *.egg-info/
 .mypy_cache/
+.vscode/
+.coverage
+
 data/
 plots/
 runs/
-.coverage
