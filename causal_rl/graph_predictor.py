@@ -139,8 +139,6 @@ class FullyConnectedPredictor(CDAGPredictor):
             assert self.location_indices is not None, "For a local predictor you must pass location indices."
             self.layers = LocalOnly(self.num_objects, unconstrained, self.location_indices, self.max_distance)
 
-        self.sym_to_asym = utils.symmetric_to_asymmetric_indices(self.num_objects)
-
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         output = self.layers(inputs)
         return output

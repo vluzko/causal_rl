@@ -30,7 +30,7 @@ class DiscretePredictor(nn.Module):
         self.msg = nn.Sequential(*msg_layers)
 
         # Set up the final neural network
-        final_layers: List[nn.Module] = [nn.Linear(self.obj_dim * 2, msg_widths[0])]
+        final_layers: List[nn.Module] = [nn.Linear(self.obj_dim * 2, final_widths[0])]
 
         for prev_width, width in zip(final_widths[:-1], final_widths[1:]):
             final_layers.append(nn.BatchNorm1d(prev_width))
