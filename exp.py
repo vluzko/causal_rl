@@ -16,7 +16,7 @@ from typing import Tuple, List, Union, Set
 from causal_rl.environments import CausalEnv, HardSpheres, MultiTyped, WithTypes, Mujoco
 from causal_rl.graph_predictor import FullyConnectedPredictor, ConvLinkPredictor, CDAGPredictor
 from causal_rl.state_predictor import DiscretePredictor, WeightedPredictor
-from causal_rl.model import NaivePredictor, CausalPredictor
+from causal_rl.model import NaivePredictor, GraphAndMessages
 from causal_rl.utils import plot_exploration, plot_coll_loss, plot_state_loss, load_sim, store_sim
 
 ENVIRONMENT_MAP = {
@@ -842,12 +842,206 @@ class PerfectState(FullArch):
         return super().get_data()
 
 
+class FullModel(Experiment):
+    """The full architecture experiment.
+
+    Attributes:
+        env (Environment):                  The environment to run on.
+        graph_predictor (CDAGPredictor):    A neural network whose output is a distribution on Bipartite(k, k), where k is the number of
+                                                objects in the environment.
+        state_predictor (nn.Module):        A neural network from (current_state, Bipartite(k, k)) -> next_state.
+        variational (bool):                 Whether or not to use the weighted or the sampling architecture.
+        asymmetric (bool):                  Whether or not the model should predict asymmetric causal graphs.
+        convolutional (bool):               Whether or not the graph predictor should be convolutional or fully-connected
+        local (bool):                       Whether or not to force the graph predictor to only predict local causal relations.
+        epochs (int):                       Number of epochs to run for.
+        steps (int):                        Number of steps in an epoch.
+        batch_size (int):                   Size of an individual batch.
+        lr (float):                         The initial learning rate for Adam.
+        reg_param (float):                  L1 regularization parameter on the causal graph prediction.
+    """
+    name = 'full'
+
+    def __init__(self, env, steps: int, lr: float, epochs: int=1, gen_new: bool=True, reg_param: float=1.0,
+                lin_widths: Tuple[int, ...]=(32, 32),
+                msg_widths: Tuple[int, ...]=(32, 32),
+                final_widths: Tuple[int, ...]=(32, 32),
+                asymmetric: bool=False,
+                convolutional: bool=False,
+                local: bool=False,
+                iteration_steps: int=0,
+                bad_state_weight: float=1.0,
+                variational: bool=False,
+                buffer_prob: float=0.0,
+                max_distance: float=30.0,
+                batch_size: int=32,
+                save_model: bool=False):
+        super().__init__(env, steps, lr, gen_new=gen_new)
+
+        self.save_model = save_model
+
+        # Training parameters
+        self.epochs = epochs
+        self.reg_param = reg_param
+        self.batch_size = batch_size
+        self.buffer_prob = buffer_prob
+        self.iteration_steps = iteration_steps
+        self.bad_state_weight = bad_state_weight
+
+        # Model parameters
+        self.asymmetric = asymmetric
+        self.convolutional = convolutional
+        self.variational = variational
+        self.local = local
+        self.max_distance = max_distance
+
+        self.model = GraphAndMessages(self.env.num_obj, self.env.obj_dim).to(DEVICE)
+
+    @property
+    def graph_size(self):
+        return (self.env.num_obj * (self.env.num_obj - 1))
+
+    @property
+    def display_name(self):
+        extra = ''
+        if self.asymmetric:
+            extra += '_asymmetric'
+        if self.variational:
+            extra += '_variational'
+        if self.bad_state_weight != 1.0:
+            extra += '_overweight({})'.format(self.bad_state_weight)
+        if self.iteration_steps > 0:
+            extra += '_iteration({})'.format(self.iteration_steps)
+        if self.local:
+            extra += '_local'
+        if self.convolutional:
+            extra += '_wconvs'
+        if self.buffer_prob > 0.0:
+            extra += '_buffer({})'.format(self.buffer_prob)
+        return '{}_{}'.format(self.name, self.steps) + extra
+
+    def get_data(self) -> Tuple[StateAndCollisions, DataLoader]:
+        "Get a dataset and dataloader for the current environment"
+        if self.buffer_prob > 0.0:
+            dataset: StateAndCollisions = BufferedState(self.env, self.steps, self.buffer_prob)
+        else:
+            dataset = SimpleDataset(self.env, self.steps)
+        self.dataset = dataset
+        self.dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        return self.dataset, self.dataloader
+
+    def run(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Run the entire training loop
+
+        Returns:
+            Losses and collision losses
+        """
+        # Setup
+        dataset, dataloader = self.get_data()
+
+        opt = optim.Adam(self.model.parameters(), lr=self.lr)
+        opt.zero_grad()
+
+        losses = torch.zeros(self.epochs * self.steps)
+        pred_collisions = torch.zeros((self.epochs * self.steps, self.graph_size)).to(DEVICE)
+
+        # The true collisions at each step
+        true_collisions: List[torch.Tensor] = []
+
+        # The gradients of the graph predictor at each step
+        graph_gradients: List[List[float]] = []
+
+        for e in range(self.epochs):
+            print("Epoch: {}".format(e))
+
+            for i, (node_state_batch, true_state_batch, true_graph_batch, true_indices) in enumerate(dataloader):
+                mini_batch_size = len(node_state_batch)
+                storage_index = e * self.steps + i * self.batch_size
+
+                # Next state prediction
+                pred_adj_matrix_probabilities, state_pred = self.model(node_state_batch)
+
+                ## Calculate losses and backprop
+
+                # MSE Loss
+                loss = functional.mse_loss(state_pred, true_state_batch, reduction='none').view(mini_batch_size, -1)
+                batch_loss = loss.sum(dim=1) / loss.shape[1]
+
+                # Handle bad states
+                if storage_index > self.batch_size * 5:
+                    max_loss = 2.0 * losses[storage_index - self.batch_size // 2: storage_index].mean()
+                    filt = batch_loss > max_loss
+
+                    # Store bad state indices
+                    bad_indices = true_indices[filt.nonzero(as_tuple=False).view(-1)]
+                    dataset.update(bad_indices)
+
+                    # Overweight bad states
+                    batch_loss[filt] *= self.bad_state_weight
+
+                mean_loss = batch_loss.mean()
+
+                # L1 regularization for the graph predictor
+                if self.reg_param > 0:
+                    l1_reg = self.reg_param * torch.norm(pred_adj_matrix_probabilities, p=1)
+                    combined_loss = l1_reg + mean_loss
+                else:
+                    combined_loss = mean_loss
+
+                combined_loss.backward(retain_graph=True)
+
+                opt.step()
+                opt.zero_grad()
+
+                # Store everything
+                pred_collisions[storage_index: storage_index + mini_batch_size] = pred_adj_matrix_probabilities
+                true_collisions.append(true_graph_batch)
+                losses[storage_index: storage_index + mini_batch_size] = batch_loss.detach() #/ true_state_batch.view(mini_batch_size, -1).norm(dim=1)
+                self.writer.add_scalar('State L2 Loss', combined_loss.item(), storage_index)
+
+        if self.save_model:
+            self.save()
+
+        # Compute collision losses
+        collision_losses, full_coll_losses = self.collision_losses(true_collisions, pred_collisions)
+        for i, cl in enumerate(collision_losses):
+            self.writer.add_scalar('Collision L2 Loss', cl, i)
+
+        return losses, full_coll_losses.detach()
+
+    def collision_losses(self, true_collisions: List[torch.Tensor], pred_collisions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Calculate the L2 norm between the true and predicted causal graphs.
+        Also calculates the L2 norm on just the states that had non-trivial causal graphs.
+        """
+        mask = torch.ones((self.env.num_obj, self.env.num_obj), dtype=torch.bool).to(DEVICE)
+        mask = mask ^ torch.eye(self.env.num_obj, dtype=torch.bool).to(DEVICE)
+        collisions_tensor = torch.cat(true_collisions)
+
+        masked_collisions = torch.masked_select(collisions_tensor, mask).view(collisions_tensor.shape[0], -1)
+        had_collision_index = torch.nonzero(masked_collisions, as_tuple=False)[:, 0].unique()
+        true_had = masked_collisions[had_collision_index]
+        pred_had = pred_collisions[had_collision_index]
+
+        coll_losses = torch.norm(true_had - pred_had, dim=1)
+        full_coll_losses = torch.norm(masked_collisions - pred_collisions, dim=1)
+        return coll_losses, full_coll_losses
+
+    def save(self):
+        torch.save(self.graph_predictor.state_dict(), str(MODELS / '{}_graph.tch'.format(self.display_name)))
+        torch.save(self.state_predictor.state_dict(), str(MODELS / '{}_state.tch'.format(self.display_name)))
+
+    def load(self):
+        self.graph_predictor.load_state_dict(torch.load(str(MODELS / '{}_graph.tch'.format(self.display_name))))
+        self.state_predictor.load_state_dict(torch.load(str(MODELS / '{}_state.tch'.format(self.display_name))))
+
+
 EXPERIMENT_MAP = {
     'just_state': PerfectGraph,
     'naive_model': NaiveModel,
     'full_arch': FullArch,
     'perfect_state': PerfectState,
     'prebuffer': PreBuffer,
+    'e2e': FullModel
 }
 
 
@@ -1106,6 +1300,22 @@ def mujoco(steps: int=3000):
 
         exp_name = '{}_{}'.format(env_name, steps)
         plot_display(losses, folder, exp_name, 10)
+
+
+def shared(steps=1000):
+    """Test the shared parameters network"""
+    folder = Path('tmp')
+
+    for env_size, num_obj in ((100, 5), (250, 15), (500, 25)):
+        env = HardSpheres(num_obj=num_obj, width=env_size)
+
+        exp = FullModel(env, steps=steps, lr=0.1)
+        losses, coll_losses = exp.run()
+
+        exp_name = '{}_{}_{}'.format(steps, num_obj, env_size)
+        exp_name = 'shared_' + exp_name
+        plot_coll_loss(coll_losses.cpu(), folder, exp_name)
+        plot_state_loss(losses, folder, exp_name)
 
 
 def plot_learning_comparison():
