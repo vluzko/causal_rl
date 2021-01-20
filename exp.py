@@ -958,15 +958,6 @@ class FullModel(Experiment):
                 mini_batch_size = len(node_state_batch)
                 storage_index = e * self.steps + i * self.batch_size
 
-                # TODO: Move state and graph prediction into FullModel class.
-                # The raw predictions for the upper triangle of the adjacency matrix.
-                # pred_adj_matrix_probabilities = self.graph_predictor(node_state_batch.view(mini_batch_size, -1))
-                # if not self.variational:
-                #     pred_adj_matrix = pred_adj_matrix_probabilities
-                # else:
-                #     dist = distributions.Bernoulli(probs=pred_adj_matrix_probabilities)
-                #     pred_adj_matrix = dist.sample()
-
                 # Next state prediction
                 pred_adj_matrix_probabilities, state_pred = self.model(node_state_batch)
 
@@ -999,26 +990,12 @@ class FullModel(Experiment):
 
                 combined_loss.backward(retain_graph=True)
 
-                # The loss for the graph predictor
-                # Only defined when we use the variational architecture.
-                # if self.variational:
-                #     graph_loss = dist.log_prob(pred_adj_matrix) * combined_loss.detach()
-                #     graph_loss.mean().backward()
-
-                # TODO: Move into FullModel class.
-                # Record graph predictor gradients
-                # for j in (0, 3, 5):
-                #     layer = self.graph_predictor.layers[j]
-                #     grad_norm = layer.weight.grad.norm().item()
-                #     self.writer.add_scalar('Graph Predictor Layer {} Gradient'.format(j // 2), grad_norm, i)
-
                 opt.step()
                 opt.zero_grad()
 
                 # Store everything
                 pred_collisions[storage_index: storage_index + mini_batch_size] = pred_adj_matrix_probabilities
                 true_collisions.append(true_graph_batch)
-                batch_norm = torch.norm((true_state_batch - state_pred).view(mini_batch_size, -1), dim=1)
                 losses[storage_index: storage_index + mini_batch_size] = batch_loss.detach() #/ true_state_batch.view(mini_batch_size, -1).norm(dim=1)
                 self.writer.add_scalar('State L2 Loss', combined_loss.item(), storage_index)
 
@@ -1030,16 +1007,7 @@ class FullModel(Experiment):
         for i, cl in enumerate(collision_losses):
             self.writer.add_scalar('Collision L2 Loss', cl, i)
 
-        # Store gradients
-        grad_tens = torch.tensor(graph_gradients)
-
         return losses, full_coll_losses.detach()
-
-    def backprop(self, g_opt: Optimizer, s_opt: Optimizer):
-        g_opt.step()
-        s_opt.step()
-        g_opt.zero_grad()
-        s_opt.zero_grad()
 
     def collision_losses(self, true_collisions: List[torch.Tensor], pred_collisions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Calculate the L2 norm between the true and predicted causal graphs.
@@ -1057,52 +1025,6 @@ class FullModel(Experiment):
         coll_losses = torch.norm(true_had - pred_had, dim=1)
         full_coll_losses = torch.norm(masked_collisions - pred_collisions, dim=1)
         return coll_losses, full_coll_losses
-
-    def test(self) -> Tuple[float, float]:
-        """Test a trained model.
-
-        Returns:
-            Average state prediction and graph prediction loss.
-        """
-        test_size = 1000
-        dataset = SimpleDataset(self.env, test_size)
-        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
-        self.graph_predictor.eval()
-        self.state_predictor.eval()
-
-        losses = torch.zeros(test_size)
-        pred_collisions = torch.zeros((test_size, self.graph_size)).to(DEVICE)
-        true_collisions: List[torch.Tensor] = []
-
-        for i, (node_state_batch, true_state_batch, true_graph_batch, true_indices) in enumerate(dataloader):
-            mini_batch_size = len(node_state_batch)
-            storage_index = i * self.batch_size
-
-            # The raw predictions for the upper triangle of the adjacency matrix.
-            pred_adj_matrix_probabilities = self.graph_predictor(node_state_batch.view(mini_batch_size, -1))
-            if not self.variational:
-                pred_adj_matrix = pred_adj_matrix_probabilities
-            else:
-                dist = distributions.Bernoulli(probs=pred_adj_matrix_probabilities)
-                pred_adj_matrix = dist.sample()
-
-            state_pred = self.state_predictor(node_state_batch, pred_adj_matrix)
-
-            # Calculate losses and backprop
-
-            # MSE Loss
-            loss = functional.mse_loss(state_pred, true_state_batch, reduction='none').view(mini_batch_size, -1)
-            batch_loss = loss.sum(dim=1) / loss.shape[1]
-            mean_loss = batch_loss.mean()
-
-            # Store everything
-            pred_collisions[storage_index: storage_index + mini_batch_size] = pred_adj_matrix_probabilities
-            true_collisions.append(true_graph_batch)
-            batch_norm = torch.norm((true_state_batch - state_pred).view(mini_batch_size, -1), dim=1)
-            losses[storage_index: storage_index + mini_batch_size] = batch_loss.detach()
-        collision_losses, full_coll_losses = self.collision_losses(true_collisions, pred_collisions)
-
-        return losses.mean().item(), full_coll_losses.mean().item()
 
     def save(self):
         torch.save(self.graph_predictor.state_dict(), str(MODELS / '{}_graph.tch'.format(self.display_name)))
@@ -1381,21 +1303,19 @@ def mujoco(steps: int=3000):
 
 
 def shared(steps=1000):
-    env_sizes = (250, 750)
-    # num_objs = (5, 25)
-    folder = Path('weight_vs_var')
+    """Test the shared parameters network"""
+    folder = Path('tmp')
 
     for env_size, num_obj in ((100, 5), (250, 15), (500, 25)):
         env = HardSpheres(num_obj=num_obj, width=env_size)
 
-        for variational in (True, False):
-            exp = FullModel(env, steps=steps, lr=0.1, variational=variational, convolutional=False)
-            losses, coll_losses = exp.run()
+        exp = FullModel(env, steps=steps, lr=0.1)
+        losses, coll_losses = exp.run()
 
-            exp_name = '{}_{}_{}'.format(steps, num_obj, env_size)
-            exp_name = ('var_' if variational else 'full_') + exp_name
-            # plot_coll_loss(coll_losses.cpu(), folder, exp_name)
-            # plot_state_loss(losses, folder, exp_name)
+        exp_name = '{}_{}_{}'.format(steps, num_obj, env_size)
+        exp_name = 'shared_' + exp_name
+        plot_coll_loss(coll_losses.cpu(), folder, exp_name)
+        plot_state_loss(losses, folder, exp_name)
 
 
 def plot_learning_comparison():

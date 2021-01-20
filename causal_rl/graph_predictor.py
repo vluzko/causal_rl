@@ -19,19 +19,19 @@ class CDAGPredictor(nn.Module):
     """Abstract class for predicting a causal DAG from state.
 
     Attributes:
-        num_objects (int):                              The number of objects in the state.
+        num_obj (int):                              The number of objects in the state.
         obj_dim (int):                                  The dimension of an object.
         location_indices: (Optional[Tuple[int, ...]]):  The indices of state that correspond to location.
         max_distance (Optional[float]):                 The maximum distance between nodes with a causal connection.
         asymmetric (bool):                              Whether or not A affects B implies B affects A.
     """
 
-    def __init__(self, num_objects: int, obj_dim: int,
+    def __init__(self, num_obj: int, obj_dim: int,
                  asymmetric: bool=False,
                  max_distance: Optional[float]=None,
                  location_indices: Optional[Tuple[int, ...]]=None):
         super().__init__()
-        self.num_objects = num_objects
+        self.num_obj = num_obj
         self.obj_dim = obj_dim
         self.location_indices = location_indices
         self.max_distance = max_distance
@@ -54,8 +54,8 @@ class SymToFull(nn.Module):
 
     def __init__(self, num_obj: int):
         super().__init__()
-        self.num_objects = num_obj
-        self.sym_to_asym = utils.symmetric_to_asymmetric_indices(self.num_objects)
+        self.num_obj = num_obj
+        self.sym_to_asym = utils.symmetric_to_asymmetric_indices(self.num_obj)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return inputs[:, self.sym_to_asym]
@@ -64,17 +64,17 @@ class SymToFull(nn.Module):
 class LocalOnly(nn.Module):
     """A layer to restrict predictions to be local."""
 
-    def __init__(self, num_objects: int, unconstrained_layers: nn.Module, location_indices: Tuple[int, ...], max_distance: float):
+    def __init__(self, num_obj: int, unconstrained_layers: nn.Module, location_indices: Tuple[int, ...], max_distance: float):
         super().__init__()
-        self.num_objects = num_objects
+        self.num_obj = num_obj
         self.unconstrained_layers = unconstrained_layers
         self.location_indices = location_indices
         self.max_distance = max_distance
-        self.source_state_indices, self.target_state_indices = utils.state_to_source_sink_indices(self.num_objects)
+        self.source_state_indices, self.target_state_indices = utils.state_to_source_sink_indices(self.num_obj)
 
     def distances(self, state: torch.Tensor) -> torch.Tensor:
         batch_size = state.shape[0]
-        positions = state.view(batch_size, self.num_objects, -1)[:, :, self.location_indices]
+        positions = state.view(batch_size, self.num_obj, -1)[:, :, self.location_indices]
 
         source_node_states = positions[:, self.source_state_indices].view(-1, len(self.location_indices))
         target_node_states = positions[:, self.target_state_indices].view(-1, len(self.location_indices))
@@ -130,14 +130,14 @@ class FullyConnectedPredictor(CDAGPredictor):
 
         # If it's not asymmetric, we need to expand the upper diagonal representation to a full matrix.
         if not self.asymmetric:
-            layers.append(SymToFull(self.num_objects))
+            layers.append(SymToFull(self.num_obj))
 
         if self.max_distance is None:
             self.layers: nn.Module = nn.Sequential(*layers)
         else:
             unconstrained = nn.Sequential(*layers)
             assert self.location_indices is not None, "For a local predictor you must pass location indices."
-            self.layers = LocalOnly(self.num_objects, unconstrained, self.location_indices, self.max_distance)
+            self.layers = LocalOnly(self.num_obj, unconstrained, self.location_indices, self.max_distance)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         output = self.layers(inputs)
@@ -157,10 +157,12 @@ class ConvLinkPredictor(CDAGPredictor):
         self.input_size = 2 * obj_dim
         self.output_size = 1
         self.layer_widths = layer_widths
+        self.number_of_pairs = self.num_obj * (self.num_obj - 1) if self.asymmetric else (self.num_obj * (self.num_obj - 1)) // 2
+
         layers: List[nn.Module] = [nn.Linear(self.input_size, layer_widths[0])]
 
         for in_size, out_size in zip(layer_widths[:-1], layer_widths[1:]):
-            layers.append(nn.BatchNorm1d(in_size))
+            layers.append(nn.BatchNorm1d(self.number_of_pairs))
             layers.append(nn.LeakyReLU())
             layers.append(nn.Linear(in_size, out_size))
         layers.append(nn.LeakyReLU())
@@ -172,23 +174,23 @@ class ConvLinkPredictor(CDAGPredictor):
 
         if self.asymmetric:
             # If asymmetric, we look at all ordered pairs of states
-            self.source_indices, self.sink_indices = utils.state_to_source_sink_indices(self.num_objects)
+            self.source_indices, self.sink_indices = utils.state_to_source_sink_indices(self.num_obj)
         else:
             # If symmetric, we look at all unordered pairs of states.
-            self.source_indices, self.sink_indices = utils.flattened_upper_adj_to_adj_indices(self.num_objects)
-            layers.append(SymToFull(self.num_objects))
+            self.source_indices, self.sink_indices = utils.flattened_upper_adj_to_adj_indices(self.num_obj)
+            layers.append(SymToFull(self.num_obj))
 
         if self.max_distance is None:
             self.module: nn.Module = nn.Sequential(*layers)
         else:
             unconstrained = nn.Sequential(*layers)
             assert self.location_indices is not None, "For a local predictor you must pass location indices."
-            self.module = LocalOnly(self.num_objects, unconstrained, self.location_indices, self.max_distance)
+            self.module = LocalOnly(self.num_obj, unconstrained, self.location_indices, self.max_distance)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        reshaped = inputs.view((-1, self.num_objects, self.obj_dim))
+        reshaped = inputs.view((-1, self.num_obj, self.obj_dim))
         # Pair up source and target states
         paired_states = torch.cat((reshaped[:, self.source_indices], reshaped[:, self.sink_indices]), dim=2)
         output = self.module(paired_states)
-        # The module produces a tensor of shape (batch_size x (num_objects * (num_objects - 1)) x 1)
+        # The module produces a tensor of shape (batch_size x (num_obj * (num_obj - 1)) x 1)
         return output.squeeze()

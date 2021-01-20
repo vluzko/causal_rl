@@ -67,12 +67,13 @@ class GraphAndMessages(LocalRepresentation):
         super().__init__(num_obj, obj_dim)
 
         self.input_size = 2 * obj_dim
-        self.output_size = 2
+        self.output_size = 1 + obj_dim
         self.layer_widths = layer_widths
+        self.number_of_pairs = self.num_obj * (self.num_obj - 1)
         layers: List[nn.Module] = [nn.Linear(self.input_size, layer_widths[0])]
 
         for in_size, out_size in zip(layer_widths[:-1], layer_widths[1:]):
-            layers.append(nn.BatchNorm1d(in_size))
+            layers.append(nn.BatchNorm1d(self.number_of_pairs))
             layers.append(nn.LeakyReLU())
             layers.append(nn.Linear(in_size, out_size))
         layers.append(nn.LeakyReLU())
@@ -100,20 +101,10 @@ class GraphAndMessages(LocalRepresentation):
         paired_states = torch.cat((reshaped[:, self.source_indices], reshaped[:, self.target_indices]), dim=2)
         output = self.module(paired_states).squeeze()
 
-        edges = nn.functional.sigmoid(output[0: len(output) - 1: 2])
-        messages = output[1: len(output): 2]
+        edges = torch.sigmoid(output[:, :, :1])
+        messages = output[:, :, 1:]
 
         weighted_messages = torch.mul(edges, messages)
-
-        # sources = inputs[:, self.source_indices]
-        # targets = inputs[:, self.target_indices]
-
-        # sources_with_edges = torch.mul(sources, edges.view(*edges.shape, 1))
-        # targets_with_edges = torch.mul(targets, edges.view(*edges.shape, 1))
-
-        # Actual message passing
-        # need_message = torch.cat((sources_with_edges, targets_with_edges), dim=2)
-        # messages = self.msg(need_message.view(-1, self.obj_dim * 2))
 
         reshaped_for_agg = weighted_messages.view(batch_size, inputs.shape[1], -1, inputs.shape[2])
         # Add the messages from each source node to a particular target node.
@@ -124,4 +115,4 @@ class GraphAndMessages(LocalRepresentation):
         state_and_messages = torch.cat((inputs, aggregated), dim=2)
         output = self.final(state_and_messages.view(-1, self.obj_dim * 2))
 
-        return edges, output.view(batch_size, -1, self.obj_dim)
+        return edges.squeeze(), output.view(batch_size, -1, self.obj_dim)
