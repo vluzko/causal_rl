@@ -135,7 +135,7 @@ def store_sim(env, steps) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     return states, collisions, rewards
 
 
-def load_sim(env, steps: int, gen_new: bool=True) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def load_sim(env, steps: int, gen_new: bool=False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Load a simulation of the given environment with the given number of steps.
     If no such simulation exists or gen_new is True, then a new simulation is run.
     """

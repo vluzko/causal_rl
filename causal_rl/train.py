@@ -14,15 +14,11 @@ from random import sample
 from torch import optim, distributions
 from torch.optim.optimizer import Optimizer
 from torch.nn import functional
-from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import Dataset, DataLoader
-from typing import Tuple, List, Union, Set
+from typing import Tuple, List
 
-from causal_rl.environments import CausalEnv, HardSpheres, MultiTyped, WithTypes, Mujoco
-from causal_rl.graph_predictor import FullyConnectedPredictor, ConvLinkPredictor, CDAGPredictor
-from causal_rl.state_predictor import DiscretePredictor, WeightedPredictor
-from causal_rl.model import NaivePredictor, CausalPredictor, LocalRepresentation
-from causal_rl.utils import plot_exploration, plot_coll_loss, plot_state_loss, load_sim, store_sim
+from causal_rl.environments import CausalEnv
+from causal_rl.model import LocalRepresentation
 
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')

@@ -2,7 +2,6 @@ import numpy as np
 import torch
 
 from fire import Fire
-from itertools import product
 from matplotlib import pyplot as plt
 from pathlib import Path
 from random import sample
@@ -14,10 +13,10 @@ from torch.utils.data import Dataset, DataLoader
 from typing import Tuple, List, Union, Set
 
 from causal_rl.environments import CausalEnv, HardSpheres, MultiTyped, WithTypes, Mujoco
-from causal_rl.graph_predictor import FullyConnectedPredictor, ConvLinkPredictor, CDAGPredictor
+from causal_rl.graph_predictor import FullyConnectedPredictor, ConvLinkPredictor
 from causal_rl.state_predictor import DiscretePredictor, WeightedPredictor
 from causal_rl.model import NaivePredictor, GraphAndMessages
-from causal_rl.utils import plot_exploration, plot_coll_loss, plot_state_loss, load_sim, store_sim
+from causal_rl.utils import plot_exploration, plot_coll_loss, plot_state_loss, load_sim
 
 ENVIRONMENT_MAP = {
     'bouncing_balls': HardSpheres,
