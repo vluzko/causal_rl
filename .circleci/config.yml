@@ -1,0 +1,48 @@
+version: 2.1
+orbs:
+  python: circleci/python@2.0.3
+commands:
+  run_tests:
+    steps:
+        - checkout
+        - run:
+            name: Install
+            command: pip install -r requirements.txt
+        - run:
+            name: Run tests
+            command: pytest tests/
+
+jobs:
+  build_and_test:
+    docker:
+      - image: circleci/python:3.10
+    steps:
+      - checkout
+      - run:
+          name: Install
+          command: |
+            pip install .[dev]
+            echo $HOME
+      - run:
+          name: Type checking
+          command: mypy causal_rl/
+      - run:
+          name: Run tests
+          command: |
+            pip install coverage
+            coverage run -m pytest
+            coverage report
+            coverage html  # open htmlcov/index.html in a browser
+      - store_artifacts:
+          path: htmlcov
+      - run:
+          name: Upload coverage
+          command: |
+            curl -Os https://uploader.codecov.io/latest/linux/codecov
+            chmod +x codecov
+            ./codecov
+
+workflows:
+  build_and_test-workflow:
+    jobs:
+      - build_and_test

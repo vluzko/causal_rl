@@ -1,0 +1,44 @@
+[project]
+name = "causal_rl"
+version = "0.1.0"
+authors = [
+  { name="Vincent Luczkow", email="vincent.luczkow@gmail.com" },
+]
+description = "Causality and reinforcement learning in Python."
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "einops>=0.6.0",
+    "gym==0.17.2",
+    "matplotlib==3.6.3",
+    "networkx>=3.0",
+    "numpy>=1.24.1",
+    "pymunk>=6.4.0",
+    "scipy>=1.10.0",
+    "typing-extensions>=4.4.0",
+    "wandb==0.12.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=22.12.0",
+    "mypy>=0.991",
+    "pre-commit>=3.0.1",
+    "pytest>=7.2.1",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/vluzko/causal_rl"
+"Bug Tracker" = "https://github.com/vluzko/causal_rl/issues"
+
+
+[build-system]
+requires = ["setuptools>=67.0"]
+build-backend = "setuptools.build_meta"
