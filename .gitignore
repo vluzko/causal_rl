@@ -7,4 +7,12 @@ __pycache__/
 data/
 plots/
 runs/
-scripts/
+logs/
+cluster/
+dump_*/
+wandb/
+**/loki/
+
+v-cdn/
+NRI/
+dnri/

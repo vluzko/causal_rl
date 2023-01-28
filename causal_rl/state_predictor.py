@@ -1,3 +1,4 @@
+from einops import rearrange
 import torch
 from torch import nn
 from torch.nn import Sequential, Linear, LeakyReLU, functional as F
@@ -9,8 +10,14 @@ from causal_rl import utils
 
 class DiscretePredictor(nn.Module):
     """Make predictions using a discrete graph on nodes."""
-    
-    def __init__(self, num_obj: int, obj_dim: int, msg_widths: Tuple[int, ...]=(16,), final_widths: Tuple[int, ...]=(16,)):
+
+    def __init__(
+        self,
+        num_obj: int,
+        obj_dim: int,
+        msg_widths: Tuple[int, ...] = (16,),
+        final_widths: Tuple[int, ...] = (16,),
+    ):
         super().__init__()
         self.num_obj = num_obj
         self.obj_dim = obj_dim
@@ -42,7 +49,9 @@ class DiscretePredictor(nn.Module):
 
         self.final = nn.Sequential(*final_layers)
 
-        self.source_indices, self.target_indices = utils.state_to_source_sink_indices(self.num_obj)
+        self.source_indices, self.target_indices = utils.state_to_source_sink_indices(
+            self.num_obj
+        )
 
     def forward(self, state: torch.Tensor, edges: torch.Tensor):
         batch_size = state.shape[0]
@@ -56,6 +65,7 @@ class DiscretePredictor(nn.Module):
         targets_with_edges = torch.mul(targets, edges.view(*edges.shape, 1))
 
         # Actual message passing
+
         need_message = torch.cat((sources_with_edges, targets_with_edges), dim=2)
         messages = self.msg(need_message.view(-1, self.obj_dim * 2))
 
@@ -75,7 +85,13 @@ class DiscretePredictor(nn.Module):
 class WeightedPredictor(nn.Module):
     """Predict the next state using the binomial distribution on each edge."""
 
-    def __init__(self, num_obj: int, obj_dim: int, msg_widths: Tuple[int, ...]=(), final_widths: Tuple[int, ...]=()):
+    def __init__(
+        self,
+        num_obj: int,
+        obj_dim: int,
+        msg_widths: Tuple[int, ...] = (32, 32),
+        final_widths: Tuple[int, ...] = (32, 32),
+    ):
         super().__init__()
         self.num_obj = num_obj
         self.obj_dim = obj_dim
@@ -104,7 +120,9 @@ class WeightedPredictor(nn.Module):
         final_layers.append(nn.Linear(final_widths[-1], self.obj_dim))
 
         self.final = nn.Sequential(*final_layers)
-        self.target_indices, self.source_indices = utils.state_to_source_sink_indices(self.num_obj)
+        self.target_indices, self.source_indices = utils.state_to_source_sink_indices(
+            self.num_obj
+        )
 
     def forward(self, state: torch.Tensor, probs: torch.Tensor) -> torch.Tensor:
         """Pass messages.
@@ -115,17 +133,21 @@ class WeightedPredictor(nn.Module):
         """
         batch_size = state.shape[0]
         # The graph is fully connected, so we have a slightly weird architecture.
-        target_node_states = state[:, self.target_indices]
-        source_node_states = state[:, self.source_indices]
+        target_node_states = state[:, self.target_indices, :]
+        source_node_states = state[:, self.source_indices, :]
 
         # Each row is a pair [target_node, source_node].
-        batch = torch.cat((target_node_states, source_node_states), dim=2)
+        batch = torch.cat((target_node_states, source_node_states), dim=1)
 
         # Pass messages from source nodes to target nodes.
-        messages = self.msg(batch.view(-1, self.obj_dim * 2)).view(batch_size, -1, self.obj_dim)
+        messages = self.msg(batch.view(-1, self.obj_dim * 2)).view(
+            batch_size, -1, self.obj_dim
+        )
 
         # Weight messages by the probability mass on the edge
-        weighted_messages = torch.mul(probs.view(*probs.shape, 1), messages).view(batch_size, -1, self.num_obj - 1, self.obj_dim)
+        weighted_messages = torch.mul(probs.view(*probs.shape, 1), messages).view(
+            batch_size, -1, self.num_obj - 1, self.obj_dim
+        )
 
         # Aggregate the messages
         aggregated = torch.sum(weighted_messages, dim=2)

@@ -21,9 +21,9 @@ class Mujoco(CausalEnv):
         space (pymunk.Space):   The actual simulation space.
     """
 
-    cls_name = 'ant'
+    cls_name = "ant"
 
-    def __init__(self, env_name: str='Hopper-v2'):
+    def __init__(self, env_name: str = "Hopper-v2"):
         super().__init__()
         self.obj_dim = 1
         self.env_name = env_name
@@ -34,14 +34,16 @@ class Mujoco(CausalEnv):
 
     @property
     def name(self) -> str:
-        return '{}_{}'.format(self.cls_name, self.env_name)
+        return "{}_{}".format(self.cls_name, self.env_name)
 
-    def generate_data(self, epochs: int=1000, dt: float=0.01) -> Tuple[np.ndarray, np.ndarray]:
-        states = np.zeros((epochs, self.num_obj, self.obj_dim))
-        rewards = np.zeros((epochs, 1))
+    def generate_data(
+        self, length: int = 1000, dt: float = 0.01
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        states = np.zeros((length, self.num_obj, self.obj_dim))
+        rewards = np.zeros((length, 1))
         self.underlying.reset()
 
-        for t in range(epochs):
+        for t in range(length):
             # Step with a random agent
             action = self.underlying.action_space.sample()
             state, reward, done, _ = self.underlying.step(action)
@@ -55,7 +57,7 @@ class Mujoco(CausalEnv):
 
         return states, rewards
 
-    def visualize(self, state: np.ndarray, save_path: Optional[str]=None):
+    def visualize(self, state: np.ndarray, save_path: Optional[str] = None):
         """Visualize a single state.
 
         Args:
@@ -72,4 +74,3 @@ class Mujoco(CausalEnv):
         collisions = np.zeros((n, k, k))
 
         return collisions
-

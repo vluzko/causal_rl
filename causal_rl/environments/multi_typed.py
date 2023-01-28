@@ -20,9 +20,11 @@ class MultiTyped(CausalEnv):
         space (pymunk.Space):   The actual simulation space.
     """
 
-    cls_name = 'multi_typed'
+    cls_name = "multi_typed"
 
-    def __init__(self, num_obj: int=5, mass: float=10, radii: float=10, width: float=400):
+    def __init__(
+        self, num_obj: int = 5, mass: float = 10, radii: float = 10, width: float = 400
+    ):
         self.num_obj = 2 * num_obj
         self.obj_dim = 4
         self.mass = mass
@@ -34,10 +36,11 @@ class MultiTyped(CausalEnv):
 
     @property
     def name(self) -> str:
-        return '{}_{}_{}_{}'.format(self.cls_name, self.mass, self.radius, self.width)
+        return "{}_{}_{}_{}".format(self.cls_name, self.mass, self.radius, self.width)
 
     def reset(self):
         import pymunk
+
         self.space = pymunk.Space()
         self.space.gravity = (0.0, 0.0)
         self.objects = []
@@ -77,12 +80,16 @@ class MultiTyped(CausalEnv):
         static_lines = [
             pymunk.Segment(self.space.static_body, (0.0, 0.0), (0.0, self.width), 0),
             pymunk.Segment(self.space.static_body, (0.0, 0.0), (self.width, 0.0), 0),
-            pymunk.Segment(self.space.static_body, (self.width, 0.0), (self.width, self.width), 0),
-            pymunk.Segment(self.space.static_body, (0.0, self.width), (self.width, self.width), 0)
+            pymunk.Segment(
+                self.space.static_body, (self.width, 0.0), (self.width, self.width), 0
+            ),
+            pymunk.Segment(
+                self.space.static_body, (0.0, self.width), (self.width, self.width), 0
+            ),
         ]
 
         for line in static_lines:
-            line.elasticity = 1.
+            line.elasticity = 1.0
         self.space.add(static_lines)
 
         return self.get_state(), 0, False, None
@@ -95,8 +102,12 @@ class MultiTyped(CausalEnv):
         """
         state = np.zeros((self.num_obj, 4))
         for i in range(self.num_obj):
-            state[i, :2] = np.array([self.objects[i].position[0], self.objects[i].position[1]])
-            state[i, 2:] = np.array([self.objects[i].velocity[0], self.objects[i].velocity[1]])
+            state[i, :2] = np.array(
+                [self.objects[i].position[0], self.objects[i].position[1]]
+            )
+            state[i, 2:] = np.array(
+                [self.objects[i].velocity[0], self.objects[i].velocity[1]]
+            )
 
         return state
 
@@ -104,12 +115,14 @@ class MultiTyped(CausalEnv):
         self.space.step(dt)
         return self.get_state(), 0, False, None
 
-    def generate_data(self, epochs: int=10000, dt: float=0.01) -> Tuple[np.ndarray, np.ndarray]:
-        states = np.zeros((epochs, self.num_obj, 4))
-        rewards = np.zeros((epochs, 1))
+    def generate_data(
+        self, length: int = 10000, dt: float = 0.01
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        states = np.zeros((length, self.num_obj, 4))
+        rewards = np.zeros((length, 1))
         self.reset()
 
-        for t in range(epochs):
+        for t in range(length):
             states[t] = self.get_state()
             if t > 0:
                 states[t, :, 2:] = (states[t, :, :2] - states[t - 1, :, :2]) / dt
@@ -117,34 +130,44 @@ class MultiTyped(CausalEnv):
 
         return states, rewards
 
-    def visualize(self, state: np.ndarray, save_path: Optional[str]=None):
+    def visualize(self, state: np.ndarray, save_path: Optional[str] = None):
         """Visualize a single state.
 
         Args:
             state: The full
             save_path: Path to save the image to.
         """
-        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+        colors = ["b", "g", "r", "c", "m", "y", "k"]
         pos = state[:, :2]
         momenta = state[:, 2:]
         fig, ax = plt.subplots(figsize=(6, 6))
-        box = plt.Rectangle((0, 0), self.width, self.width, linewidth=5, edgecolor='k', facecolor='none')
+        box = plt.Rectangle(
+            (0, 0), self.width, self.width, linewidth=5, edgecolor="k", facecolor="none"
+        )
         ax.add_patch(box)
         for i in range(self.num_obj // 2):
-            circle = plt.Circle((pos[i, 0], pos[i, 1]), radius=self.radii[i], edgecolor='b')
-            label = ax.annotate('{}'.format(i), xy=(pos[i, 0], pos[i, 1]), fontsize=8, ha='center')
+            circle = plt.Circle(
+                (pos[i, 0], pos[i, 1]), radius=self.radii[i], edgecolor="b"
+            )
+            label = ax.annotate(
+                "{}".format(i), xy=(pos[i, 0], pos[i, 1]), fontsize=8, ha="center"
+            )
             # Plot the momentum
             plt.arrow(pos[i, 0], pos[i, 1], momenta[i, 0], momenta[i, 1])
             ax.add_patch(circle)
 
         for i in range(self.num_obj // 2, self.num_obj):
-            circle = plt.Rectangle((pos[i, 0], pos[i, 1]), self.radii[i], self.radii[i], edgecolor='b')
-            label = ax.annotate('{}'.format(i), xy=(pos[i, 0], pos[i, 1]), fontsize=8, ha='center')
+            circle = plt.Rectangle(
+                (pos[i, 0], pos[i, 1]), self.radii[i], self.radii[i], edgecolor="b"
+            )
+            label = ax.annotate(
+                "{}".format(i), xy=(pos[i, 0], pos[i, 1]), fontsize=8, ha="center"
+            )
             # Plot the momentum
             plt.arrow(pos[i, 0], pos[i, 1], momenta[i, 0], momenta[i, 1])
             ax.add_patch(circle)
         plt.axis([0, self.width, 0, self.width])
-        plt.axis('off')
+        plt.axis("off")
         if save_path is not None:
             plt.savefig(save_path)
         else:
@@ -156,7 +179,7 @@ class MultiTyped(CausalEnv):
         n = trajectories.shape[0]
         k = self.num_obj
         radii = np.copy(self.radii)
-        radii[self.num_obj // 2:] = radii[self.num_obj // 2:] * np.sqrt(2)
+        radii[self.num_obj // 2 :] = radii[self.num_obj // 2 :] * np.sqrt(2)
         min_dist = radii.reshape(k, 1) + radii.reshape(1, k)
         np.fill_diagonal(min_dist, 0)
 
@@ -169,7 +192,7 @@ class MultiTyped(CausalEnv):
             distances = distance.squareform(distance.pdist(locs))
             collided = np.nonzero(distances < min_dist)
 
-            collisions[i-1][collided] = 1
+            collisions[i - 1][collided] = 1
 
             collisions[i][collided] = 1
         return collisions
@@ -189,19 +212,24 @@ class MultiTyped(CausalEnv):
 
 class WithTypes(MultiTyped):
     """Include the type of the object in the state."""
-    cls_name = 'with_types'
 
-    def __init__(self, num_obj=5, mass: float=10, radii: float=10, width: float=400):
+    cls_name = "with_types"
+
+    def __init__(
+        self, num_obj=5, mass: float = 10, radii: float = 10, width: float = 400
+    ):
         super().__init__(num_obj, mass, radii, width)
         self.obj_dim = 5
         self.location_indices = (0, 1)
 
-    def generate_data(self, epochs: int=10000, dt: float=0.01) -> Tuple[np.ndarray, np.ndarray]:
-        states, rewards = super().generate_data(epochs, dt)
+    def generate_data(
+        self, length: int = 10000, dt: float = 0.01
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        states, rewards = super().generate_data(length, dt)
 
-        with_types = np.zeros((epochs, self.num_obj, self.obj_dim))
+        with_types = np.zeros((length, self.num_obj, self.obj_dim))
         with_types[:, :, :-1] = states
-        with_types[:, self.num_obj//2:, -1] = 1
+        with_types[:, self.num_obj // 2 :, -1] = 1
 
         return with_types, rewards
 
