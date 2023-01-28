@@ -22,9 +22,15 @@ class HardSpheres(CausalEnv):
         space (pymunk.Space):   The actual simulation space.
     """
 
-    cls_name = 'bouncing_balls'
+    cls_name = "bouncing_balls"
 
-    def __init__(self, num_obj: int=5, mass: float=10.0, radius: float=10.0, width: float=150.0):
+    def __init__(
+        self,
+        num_obj: int = 5,
+        mass: float = 10.0,
+        radius: float = 10.0,
+        width: float = 150.0,
+    ):
         self.num_obj = num_obj
         self.obj_dim = 4
         self.mass = mass
@@ -36,10 +42,13 @@ class HardSpheres(CausalEnv):
 
     @property
     def name(self) -> str:
-        return 'bouncing_balls_{}_{}_{}_{}'.format(self.num_obj, self.mass, self.radius, self.width)
+        return "bouncing_balls_{}_{}_{}_{}".format(
+            self.num_obj, self.mass, self.radius, self.width
+        )
 
     def reset(self):
         import pymunk
+
         self.space = pymunk.Space()
         self.space.gravity = (0.0, 0.0)
         self.objects = []
@@ -54,11 +63,11 @@ class HardSpheres(CausalEnv):
         for i in range(self.num_obj):
             mass = self.masses[i]
             radius = self.radii[i]
-            moment = pymunk.moment_for_circle(mass, 0, radius, (0,0))
+            moment = pymunk.moment_for_circle(mass, 0, radius, (0, 0))
             body = pymunk.Body(mass, moment)
             body.position = (x_pos[i], y_pos[i])
             body.velocity = (x_vel[i], y_vel[i])
-            shape = pymunk.Circle(body, radius, (0,0))
+            shape = pymunk.Circle(body, radius, (0, 0))
             shape.elasticity = 1.0
             self.space.add(body, shape)
             self.objects.append(body)
@@ -68,11 +77,11 @@ class HardSpheres(CausalEnv):
             pymunk.Segment(static_body, (0.0, 0.0), (0.0, self.width), 0),
             pymunk.Segment(static_body, (0.0, 0.0), (self.width, 0.0), 0),
             pymunk.Segment(static_body, (self.width, 0.0), (self.width, self.width), 0),
-            pymunk.Segment(static_body, (0.0, self.width), (self.width, self.width), 0)
+            pymunk.Segment(static_body, (0.0, self.width), (self.width, self.width), 0),
         ]
 
         for line in static_lines:
-            line.elasticity = 1.
+            line.elasticity = 1.0
         self.space.add(static_lines)
 
         return self.get_state(), 0, False, None
@@ -85,8 +94,12 @@ class HardSpheres(CausalEnv):
         """
         state = np.zeros((self.num_obj, 4))
         for i in range(self.num_obj):
-            state[i, :2] = np.array([self.objects[i].position[0], self.objects[i].position[1]])
-            state[i, 2:] = np.array([self.objects[i].velocity[0], self.objects[i].velocity[1]])
+            state[i, :2] = np.array(
+                [self.objects[i].position[0], self.objects[i].position[1]]
+            )
+            state[i, 2:] = np.array(
+                [self.objects[i].velocity[0], self.objects[i].velocity[1]]
+            )
 
         return state
 
@@ -95,7 +108,9 @@ class HardSpheres(CausalEnv):
         return self.get_state(), 0, False, None
 
     # TODO: Rename `epochs` to `steps`
-    def generate_data(self, epochs: int=10000, dt: float=0.01) -> Tuple[np.ndarray, np.ndarray]:
+    def generate_data(
+        self, epochs: int = 10000, dt: float = 0.01
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Generate a full run of the environment."""
         states = np.zeros((epochs, self.num_obj, 4))
         rewards = np.zeros((epochs, 1))
@@ -109,27 +124,33 @@ class HardSpheres(CausalEnv):
 
         return states, rewards
 
-    def visualize(self, state: np.ndarray, save_path: Optional[str]=None):
+    def visualize(self, state: np.ndarray, save_path: Optional[str] = None):
         """Visualize a single state.
 
         Args:
             state: State at a single time step.
             save_path: Where to save the snapshot
         """
-        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+        colors = ["b", "g", "r", "c", "m", "y", "k"]
         pos = state[:, :2]
         momenta = state[:, 2:]
         fig, ax = plt.subplots(figsize=(6, 6))
-        box = plt.Rectangle((0, 0), self.width, self.width, linewidth=5, edgecolor='k', facecolor='none')
+        box = plt.Rectangle(
+            (0, 0), self.width, self.width, linewidth=5, edgecolor="k", facecolor="none"
+        )
         ax.add_patch(box)
         for i in range(len(pos)):
-            circle = plt.Circle((pos[i, 0], pos[i, 1]), radius=self.radii[i], edgecolor='b')
-            label = ax.annotate('{}'.format(i), xy=(pos[i, 0], pos[i, 1]), fontsize=8, ha='center')
+            circle = plt.Circle(
+                (pos[i, 0], pos[i, 1]), radius=self.radii[i], edgecolor="b"
+            )
+            label = ax.annotate(
+                "{}".format(i), xy=(pos[i, 0], pos[i, 1]), fontsize=8, ha="center"
+            )
             # Plot the momentum
             plt.arrow(pos[i, 0], pos[i, 1], momenta[i, 0], momenta[i, 1])
             ax.add_patch(circle)
         plt.axis([0, 128, 0, 128])
-        plt.axis('off')
+        plt.axis("off")
         if save_path is not None:
             plt.savefig(save_path)
         else:
@@ -152,7 +173,7 @@ class HardSpheres(CausalEnv):
             distances = distance.squareform(distance.pdist(locs))
             collided = np.nonzero(distances < min_dist)
 
-            collisions[i-1][collided] = 1
+            collisions[i - 1][collided] = 1
 
             collisions[i][collided] = 1
 
@@ -169,4 +190,3 @@ class HardSpheres(CausalEnv):
         has_collision = (locs < min_coord) | (locs > max_coord)
 
         return has_collision
-
